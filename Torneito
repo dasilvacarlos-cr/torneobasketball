@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torneo de Basketball 3 vs 3</title>
+    <style>
+        :root { --primary: #1e293b; --accent: #f59e0b; --bg: #f1f5f9; --success: #10b981; --draw: #64748b; --white: #ffffff; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--primary); margin: 0; padding: 10px 10px 120px; }
+        header { text-align: center; background: var(--primary); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .is-admin .admin-only { display: inline-block !important; }
+        .admin-only { display: none; }
+        .liga-section { display: grid; grid-template-columns: 1fr 280px; gap: 15px; margin-bottom: 30px; }
+        @media (max-width: 850px) { .liga-section { grid-template-columns: 1fr; } }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; font-size: 0.85rem; }
+        th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: center; }
+        th { background: #f8fafc; color: var(--primary); }
+        .win-btn { cursor: pointer; padding: 6px; border-radius: 4px; border: 1px solid #ddd; font-size: 0.75rem; width: 95%; margin: 2px auto; display: block; background: white; transition: 0.2s; }
+        .win-btn.selected { background: var(--success); color: white; border-color: var(--success); font-weight: bold; }
+        .win-btn.draw-selected { background: var(--draw); color: white; border-color: var(--draw); }
+        .finals-grid { display: grid; gap: 12px; margin-top: 15px; }
+        .final-match { background: white; border-radius: 10px; padding: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .date-badge { background: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 0.8rem; min-width: 60px; text-align: center; }
+        .match-label { flex: 1; margin: 0 15px; font-weight: 600; font-size: 0.95rem; }
+        .winner-select { width: 100%; padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.8rem; outline: none; }
+        #controlPanel { position: fixed; bottom: 0; left: 0; width: 100%; background: #1e293be6; padding: 15px; display: none; justify-content: center; gap: 10px; z-index: 1000; box-sizing: border-box; backdrop-filter: blur(5px); }
+        .btn-ui { padding: 10px 20px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; color: white; }
+    </style>
+</head>
+<body id="pageBody">
+
+<header>
+    <h1>🏀 Torneo de Basketball 3 vs 3</h1>
+    <button id="authBtn" onclick="login()" style="background:none; border:1px solid white; color:white; border-radius:5px; padding:5px 10px; cursor:pointer; font-size: 0.8rem;">Acceso Creador</button>
+</header>
+
+<main>
+    <div class="liga-section">
+        <div>
+            <h2>Liga 1 (Grupos)</h2>
+            <table id="tableL1"><thead><tr><th>Día</th><th>Partido</th><th>Resultado</th></tr></thead><tbody id="bodyL1"></tbody></table>
+        </div>
+        <div>
+            <h3>Tabla L1</h3>
+            <table><thead><tr><th>Equipo</th><th>Pts</th></tr></thead><tbody id="posL1"></tbody></table>
+        </div>
+    </div>
+
+    <div class="liga-section">
+        <div>
+            <h2>Liga 2 (Grupos)</h2>
+            <table id="tableL2"><thead><tr><th>Día</th><th>Partido</th><th>Resultado</th></tr></thead><tbody id="bodyL2"></tbody></table>
+        </div>
+        <div>
+            <h3>Tabla L2</h3>
+            <table><thead><tr><th>Equipo</th><th>Pts</th></tr></thead><tbody id="posL2"></tbody></table>
+        </div>
+    </div>
+
+    <h2>Fase Final</h2>
+    <div class="finals-grid" id="bracket"></div>
+</main>
+
+<div id="controlPanel">
+    <button class="btn-ui" style="background:var(--accent);" onclick="sorteo()">🎲 NUEVO SORTEO</button>
+    <button class="btn-ui" style="background:var(--success);" onclick="saveData()">💾 GUARDAR PROGRESO</button>
+</div>
+
+<script>
+    const CLAVE = "carliminions";
+    let isAdmin = false;
+    let database = {
+        l1_nombres: [], l2_nombres: [],
+        resultadosGrupos: { L1: {}, L2: {} }, // Guardará nombre de ganador o "EMPATE"
+        finales: { c1: "", c2: "", c3: "", c4: "", sfA: "", sfB: "", fin: "", p3: "" }
+    };
+
+    function init() {
+        const saved = localStorage.getItem('torneo_3v3_data');
+        if(saved) database = JSON.parse(saved);
+        renderAll();
+    }
+
+    function login() {
+        if(prompt("Clave de Creador:") === CLAVE) {
+            isAdmin = true;
+            document.getElementById('pageBody').classList.add('is-admin');
+            document.getElementById('controlPanel').style.display = 'flex';
+            document.getElementById('authBtn').innerText = "Modo Creador ✅";
+            renderAll();
+        } else { alert("Clave incorrecta."); }
+    }
+
+    function sorteo() {
+        if(!confirm("¿Borrar todo y empezar nuevo sorteo?")) return;
+        let noms = [];
+        for(let i=1; i<=8; i++) noms.push(prompt(`Nombre Equipo ${i}:`) || `Eq ${i}`);
+        noms.sort(() => Math.random() - 0.5);
+        database.l1_nombres = noms.slice(0,4);
+        database.l2_nombres = noms.slice(4,8);
+        database.resultadosGrupos = { L1: {}, L2: {} };
+        database.finales = { c1: "", c2: "", c3: "", c4: "", sfA: "", sfB: "", fin: "", p3: "" };
+        renderAll();
+    }
+
+    function setResultadoGrupo(liga, pIdx, valor) {
+        if(!isAdmin) return;
+        // Si ya estaba seleccionado, lo desmarcamos. Si no, lo marcamos.
+        database.resultadosGrupos[liga][pIdx] = (database.resultadosGrupos[liga][pIdx] === valor) ? null : valor;
+        renderAll();
+    }
+
+    function calcPos(liga, equipos, partidosData) {
+        let p = {}; equipos.forEach(n => p[n] = 0);
+        
+        const esquema = [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];
+        esquema.forEach((indices, i) => {
+            const res = database.resultadosGrupos[liga][i];
+            const t1 = equipos[indices[0]];
+            const t2 = equipos[indices[1]];
+
+            if (res === "EMPATE") {
+                p[t1] += 1;
+                p[t2] += 1;
+            } else if (res === t1) {
+                p[t1] += 3;
+            } else if (res === t2) {
+                p[t2] += 3;
+            }
+        });
+
+        return Object.entries(p).sort((a,b) => b[1] - a[1]);
+    }
+
+    function renderAll() {
+        const p1Data = calcPos('L1', database.l1_nombres);
+        const p2Data = calcPos('L2', database.l2_nombres);
+        
+        renderGrupo('bodyL1', 'L1', database.l1_nombres);
+        renderGrupo('bodyL2', 'L2', database.l2_nombres);
+        
+        document.getElementById('posL1').innerHTML = p1Data.map(e => `<tr><td>${e[0]}</td><td><b>${e[1]}</b></td></tr>`).join('');
+        document.getElementById('posL2').innerHTML = p2Data.map(e => `<tr><td>${e[0]}</td><td><b>${e[1]}</b></td></tr>`).join('');
+
+        const p1 = p1Data.map(e => e[0]);
+        const p2 = p2Data.map(e => e[0]);
+
+        const cuartos = {
+            c1: [p1[0], p2[2]], c2: [p2[0], p1[2]],
+            c3: [p1[1], p2[3]], c4: [p2[1], p1[3]]
+        };
+
+        const semis = {
+            sfA: [database.finales.c1, database.finales.c3],
+            sfB: [database.finales.c2, database.finales.c4]
+        };
+
+        let pA = semis.sfA.find(eq => eq !== database.finales.sfA && eq !== "" && eq !== undefined);
+        let pB = semis.sfB.find(eq => eq !== database.finales.sfB && eq !== "" && eq !== undefined);
+        const tercerPuesto = [pA || "Perdedor Semis A", pB || "Perdedor Semis B"];
+
+        const bracket = [
+            { d: "18 Mar", id: "c1", t: "Cuartos 1", teams: cuartos.c1 },
+            { d: "19 Mar", id: "c2", t: "Cuartos 2", teams: cuartos.c2 },
+            { d: "20 Mar", id: "c3", t: "Cuartos 3", teams: cuartos.c3 },
+            { d: "23 Mar", id: "c4", t: "Cuartos 4", teams: cuartos.c4 },
+            { d: "24 Mar", id: "sfA", t: "SEMIFINAL A", teams: semis.sfA },
+            { d: "25 Mar", id: "sfB", t: "SEMIFINAL B", teams: semis.sfB },
+            { d: "26 Mar", id: "p3", t: "3er PUESTO", teams: tercerPuesto },
+            { d: "27 Mar", id: "fin", t: "🏆 FINAL", teams: [database.finales.sfA, database.finales.sfB], class: "gold" }
+        ];
+
+        document.getElementById('bracket').innerHTML = bracket.map(f => {
+            const t1 = f.teams[0] || "---"; const t2 = f.teams[1] || "---";
+            return `<div class="final-match" style="${f.class?'border:2px solid gold; background:#fffbeb':''}">
+                <div class="date-badge">${f.d}</div>
+                <div class="match-label">${f.t}: <br><span style="color:var(--accent)">${t1} vs ${t2}</span></div>
+                <div class="winner-selector">
+                    <select class="winner-select" ${!isAdmin?'disabled':''} onchange="setFinalWinner('${f.id}', this.value)">
+                        <option value="">Ganador...</option>
+                        <option value="${t1}" ${database.finales[f.id]===t1?'selected':''}>${t1}</option>
+                        <option value="${t2}" ${database.finales[f.id]===t2?'selected':''}>${t2}</option>
+                    </select>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderGrupo(id, liga, noms) {
+        const esquema = [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];
+        const dias = ["Mar 10", "Mié 11", "Jue 12", "Vie 13", "Lun 16", "Mar 17"];
+        if(!noms.length) return;
+        document.getElementById(id).innerHTML = esquema.map((e, i) => {
+            const t1 = noms[e[0]], t2 = noms[e[1]], g = database.resultadosGrupos[liga][i];
+            return `<tr><td>${dias[i]}</td><td>${t1} vs ${t2}</td>
+                <td style="display:flex; flex-direction:column; gap:2px;">
+                    <button class="win-btn ${g===t1?'selected':''}" onclick="setResultadoGrupo('${liga}',${i},'${t1}')">Gana ${t1}</button>
+                    <button class="win-btn ${g==='EMPATE'?'draw-selected':''}" onclick="setResultadoGrupo('${liga}',${i},'EMPATE')">Empate (1pt)</button>
+                    <button class="win-btn ${g===t2?'selected':''}" onclick="setResultadoGrupo('${liga}',${i},'${t2}')">Gana ${t2}</button>
+                </td></tr>`;
+        }).join('');
+    }
+
+    function setFinalWinner(id, winner) { database.finales[id] = winner; renderAll(); }
+    function saveData() { localStorage.setItem('torneo_3v3_data', JSON.stringify(database)); alert("¡Guardado!"); }
+    init();
+</script>
+</body>
+</html>
